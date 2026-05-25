@@ -62,18 +62,38 @@ export function AuthProvider({ children }) {
         if (event === 'INITIAL_SESSION') {
           if (u) {
             setCachedUserId(u.id)
-            try { await pullForUser(u.id) } catch (e) { console.error(e) }
-            setSynced(true)
+            const hasLocalData = localStorage.getItem('nt_profile') !== null
+
+            if (hasLocalData) {
+              // Data already in localStorage → show app instantly, sync in background
+              setSynced(true)
+              setLoading(false)
+              pullForUser(u.id).catch(console.error) // non-blocking
+            } else {
+              // First time on this device → must wait for cloud data
+              try { await pullForUser(u.id) } catch (e) { console.error(e) }
+              setSynced(true)
+              setLoading(false)
+            }
+          } else {
+            setLoading(false)
           }
-          setLoading(false)
         }
 
         if (event === 'SIGNED_IN') {
-          // Triggered after magic link redirect — always pull fresh data
+          // After magic link click — check if this device already has data
           setCachedUserId(u.id)
-          try { await pullForUser(u.id) } catch (e) { console.error(e) }
-          setSynced(true)
-          setLoading(false)
+          const hasLocalData = localStorage.getItem('nt_profile') !== null
+
+          if (hasLocalData) {
+            setSynced(true)
+            setLoading(false)
+            pullForUser(u.id).catch(console.error) // sync in background
+          } else {
+            try { await pullForUser(u.id) } catch (e) { console.error(e) }
+            setSynced(true)
+            setLoading(false)
+          }
         }
 
         if (event === 'TOKEN_REFRESHED') {
