@@ -6,11 +6,20 @@ const AuthContext = createContext(null)
 
 // Pull user data from Supabase directly into localStorage.
 // userId comes from the session — avoids double getSession() calls.
+// Timeout of 6s so a slow connection never freezes the loading screen.
 async function pullForUser(userId) {
-  const { data, error } = await supabase
-    .from('user_data')
-    .select('key, value')
-    .eq('user_id', userId)
+  const query = supabase.from('user_data').select('key, value').eq('user_id', userId)
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('pull timeout')), 6000)
+  )
+
+  let data, error
+  try {
+    ;({ data, error } = await Promise.race([query, timeout]))
+  } catch (e) {
+    console.warn('[sync] pull timed out — using local cache:', e.message)
+    return // proceed with whatever is in localStorage
+  }
 
   if (error) {
     console.error('[sync] pull error:', error)
@@ -65,6 +74,12 @@ export function AuthProvider({ children }) {
           try { await pullForUser(u.id) } catch (e) { console.error(e) }
           setSynced(true)
           setLoading(false)
+        }
+
+        if (event === 'TOKEN_REFRESHED') {
+          // Token silently refreshed — just update the cached user, no re-pull needed
+          if (u) setCachedUserId(u.id)
+          return
         }
 
         if (event === 'SIGNED_OUT') {

@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt', // não força reload automático; nova versão aplica no próximo abrir
       includeAssets: ['favicon.svg', 'icon-192.svg', 'icon-512.svg'],
       manifest: {
         name: 'NutriTrack',

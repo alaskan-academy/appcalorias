@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import MobileNav from './MobileNav'
 import FAB from '../ui/FAB'
+import PullToRefresh from '../ui/PullToRefresh'
 
 const FAB_ROUTES = ['/', '/refeicoes', '/agua']
 
@@ -20,6 +21,7 @@ export default function Layout() {
       </main>
       {FAB_ROUTES.includes(pathname) && <FAB />}
       <MobileNav />
+      <PullToRefresh />
     </div>
   )
 }

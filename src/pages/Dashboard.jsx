@@ -107,7 +107,7 @@ export default function Dashboard() {
   }
 
   function changeDate(delta) {
-    const d = new Date(currentDate)
+    const d = new Date(currentDate + 'T12:00:00') // noon = safe from UTC timezone shift
     d.setDate(d.getDate() + delta)
     setCurrentDate(format(d, 'yyyy-MM-dd'))
   }
