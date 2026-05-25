@@ -21,7 +21,8 @@ export default function Login() {
 
     setLoading(false)
     if (error) {
-      setError('Não foi possível enviar o link. Tente novamente.')
+      setError(error.message || 'Não foi possível enviar o link. Tente novamente.')
+      console.error('[login error]', error)
     } else {
       setSent(true)
     }
