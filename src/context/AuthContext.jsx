@@ -1,35 +1,68 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
-import { pullFromSupabase, pushAllToSupabase, clearLocalUserData } from '../utils/supabaseSync'
+import { pushAllToSupabase, clearLocalUserData, setCachedUserId, SYNC_KEYS } from '../utils/supabaseSync'
 
 const AuthContext = createContext(null)
 
+// Pull user data from Supabase directly into localStorage.
+// userId comes from the session — avoids double getSession() calls.
+async function pullForUser(userId) {
+  const { data, error } = await supabase
+    .from('user_data')
+    .select('key, value')
+    .eq('user_id', userId)
+
+  if (error) {
+    console.error('[sync] pull error:', error)
+    return // fail gracefully — app works with whatever is in localStorage
+  }
+
+  if (data && data.length > 0) {
+    // Restore cloud data to localStorage
+    data.forEach(({ key, value }) => {
+      localStorage.setItem(key, JSON.stringify(value))
+    })
+  } else {
+    // First login — migrate any existing localStorage data to Supabase
+    const rows = SYNC_KEYS
+      .filter(k => localStorage.getItem(k) !== null)
+      .map(k => {
+        try { return { user_id: userId, key: k, value: JSON.parse(localStorage.getItem(k)), updated_at: new Date().toISOString() } }
+        catch { return null }
+      })
+      .filter(Boolean)
+    if (rows.length > 0) {
+      await supabase.from('user_data').upsert(rows).catch(console.error)
+    }
+  }
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser]     = useState(null)
-  const [loading, setLoading] = useState(true)  // checking initial session
-  const [synced, setSynced]   = useState(false)  // data pulled to localStorage
+  const [user, setUser]       = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [synced, setSynced]   = useState(false)
 
   useEffect(() => {
-    // 1. Check existing session on mount
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const u = session?.user ?? null
-      setUser(u)
-      if (u) {
-        await pullFromSupabase()
-        setSynced(true)
-      }
-      setLoading(false)
-    })
-
-    // 2. Listen for auth events (login / logout / token refresh)
+    // Supabase v2: onAuthStateChange fires INITIAL_SESSION on mount.
+    // Using it as the single source of truth avoids race conditions.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         const u = session?.user ?? null
         setUser(u)
 
-        if (event === 'SIGNED_IN' && u) {
-          setLoading(true)
-          await pullFromSupabase()
+        if (event === 'INITIAL_SESSION') {
+          if (u) {
+            setCachedUserId(u.id)
+            try { await pullForUser(u.id) } catch (e) { console.error(e) }
+            setSynced(true)
+          }
+          setLoading(false)
+        }
+
+        if (event === 'SIGNED_IN') {
+          // Triggered after magic link redirect — always pull fresh data
+          setCachedUserId(u.id)
+          try { await pullForUser(u.id) } catch (e) { console.error(e) }
           setSynced(true)
           setLoading(false)
         }
@@ -37,6 +70,7 @@ export function AuthProvider({ children }) {
         if (event === 'SIGNED_OUT') {
           clearLocalUserData()
           setSynced(false)
+          setLoading(false)
         }
       }
     )
@@ -45,7 +79,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   async function signOut() {
-    await pushAllToSupabase()   // ensure latest data is saved
+    try { await pushAllToSupabase() } catch (e) { console.error(e) }
     await supabase.auth.signOut()
     clearLocalUserData()
   }
