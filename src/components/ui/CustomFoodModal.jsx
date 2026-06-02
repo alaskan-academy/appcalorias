@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import Modal from './Modal'
 
-// Preset units with default gram equivalents
 const PRESET_UNITS = [
   { label: 'gramas (g)',             value: 'g',               defaultGrams: null },
   { label: 'mililitros (mL)',        value: 'mL',              defaultGrams: null },
@@ -24,14 +23,13 @@ export default function CustomFoodModal({ open, onClose, existing, onSave }) {
   const [carbs, setCarbs]       = useState('')
   const [fat, setFat]           = useState('')
   const [fiber, setFiber]       = useState('')
+  const [macroMode, setMacroMode] = useState('per100g') // 'per100g' | 'perServing'
 
-  // Serving
   const [hasServing, setHasServing]     = useState(false)
   const [unitSelect, setUnitSelect]     = useState('unidade')
   const [customUnit, setCustomUnit]     = useState('')
   const [servingGrams, setServingGrams] = useState('')
 
-  // Pre-fill on edit
   useEffect(() => {
     if (existing) {
       setName(existing.name ?? '')
@@ -40,15 +38,12 @@ export default function CustomFoodModal({ open, onClose, existing, onSave }) {
       setCarbs(String(existing.per100g?.carbs ?? ''))
       setFat(String(existing.per100g?.fat ?? ''))
       setFiber(String(existing.per100g?.fiber ?? ''))
+      setMacroMode('per100g')
       if (existing.serving) {
         setHasServing(true)
         const preset = PRESET_UNITS.find(p => p.value === existing.serving.unit)
-        if (preset) {
-          setUnitSelect(preset.value)
-        } else {
-          setUnitSelect('__custom__')
-          setCustomUnit(existing.serving.unit)
-        }
+        setUnitSelect(preset ? preset.value : '__custom__')
+        if (!preset) setCustomUnit(existing.serving.unit)
         setServingGrams(String(existing.serving.grams ?? ''))
       } else {
         setHasServing(false)
@@ -57,9 +52,8 @@ export default function CustomFoodModal({ open, onClose, existing, onSave }) {
         setCustomUnit('')
       }
     } else {
-      // Reset
       setName(''); setCalories(''); setProtein(''); setCarbs('')
-      setFat(''); setFiber(''); setHasServing(false)
+      setFat(''); setFiber(''); setHasServing(false); setMacroMode('per100g')
       setUnitSelect('unidade'); setServingGrams(''); setCustomUnit('')
     }
   }, [existing, open])
@@ -70,23 +64,48 @@ export default function CustomFoodModal({ open, onClose, existing, onSave }) {
     if (preset?.defaultGrams !== null) setServingGrams(preset.defaultGrams ?? '')
   }
 
-  const finalUnit = unitSelect === '__custom__' ? customUnit.trim() : unitSelect
+  const finalUnit  = unitSelect === '__custom__' ? customUnit.trim() : unitSelect
   const needsGrams = hasServing && !UNIT_WITHOUT_GRAMS.includes(finalUnit)
+  const canToggleMode = needsGrams && !!parseFloat(servingGrams)
+
+  // Preview kcal per serving
+  const previewKcal = (() => {
+    const cal = parseFloat(calories)
+    const g   = parseFloat(servingGrams)
+    if (!cal || !g) return null
+    if (macroMode === 'perServing') return Math.round(cal)
+    return Math.round((cal / 100) * g)
+  })()
 
   function handleSave() {
     if (!name.trim() || !calories) return
+
+    let per100g = {
+      calories: parseFloat(calories) || 0,
+      protein:  parseFloat(protein)  || 0,
+      carbs:    parseFloat(carbs)    || 0,
+      fat:      parseFloat(fat)      || 0,
+      fiber:    parseFloat(fiber)    || 0,
+    }
+
+    // Convert perServing → per100g
+    if (macroMode === 'perServing' && canToggleMode) {
+      const g = parseFloat(servingGrams)
+      const factor = 100 / g
+      per100g = {
+        calories: Math.round((per100g.calories * factor) * 10) / 10,
+        protein:  Math.round((per100g.protein  * factor) * 10) / 10,
+        carbs:    Math.round((per100g.carbs    * factor) * 10) / 10,
+        fat:      Math.round((per100g.fat      * factor) * 10) / 10,
+        fiber:    Math.round((per100g.fiber    * factor) * 10) / 10,
+      }
+    }
 
     const food = {
       id: existing?.id ?? Date.now().toString(),
       name: name.trim(),
       source: 'custom',
-      per100g: {
-        calories: parseFloat(calories) || 0,
-        protein:  parseFloat(protein)  || 0,
-        carbs:    parseFloat(carbs)    || 0,
-        fat:      parseFloat(fat)      || 0,
-        fiber:    parseFloat(fiber)    || 0,
-      },
+      per100g,
     }
 
     if (hasServing && finalUnit) {
@@ -101,7 +120,9 @@ export default function CustomFoodModal({ open, onClose, existing, onSave }) {
     onClose()
   }
 
-  const isValid = name.trim() && calories
+  const macroLabel = macroMode === 'perServing' && canToggleMode
+    ? `por 1 ${finalUnit}`
+    : 'por 100g / 100mL'
 
   return (
     <Modal open={open} onClose={onClose} title={existing ? 'Editar alimento' : 'Novo alimento'} size="md">
@@ -113,33 +134,7 @@ export default function CustomFoodModal({ open, onClose, existing, onSave }) {
             placeholder="Ex: Banana prata, Whey protein…" autoFocus />
         </div>
 
-        <div>
-          <p className="label mb-2">Macros por 100g / 100mL</p>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="label text-[11px]">Calorias (kcal) *</label>
-              <input className="input" type="number" value={calories} onChange={e => setCalories(e.target.value)} placeholder="0" min="0" />
-            </div>
-            <div>
-              <label className="label text-[11px]">Proteína (g)</label>
-              <input className="input" type="number" value={protein} onChange={e => setProtein(e.target.value)} placeholder="0" min="0" step="0.1" />
-            </div>
-            <div>
-              <label className="label text-[11px]">Carboidratos (g)</label>
-              <input className="input" type="number" value={carbs} onChange={e => setCarbs(e.target.value)} placeholder="0" min="0" step="0.1" />
-            </div>
-            <div>
-              <label className="label text-[11px]">Gorduras (g)</label>
-              <input className="input" type="number" value={fat} onChange={e => setFat(e.target.value)} placeholder="0" min="0" step="0.1" />
-            </div>
-            <div className="col-span-2">
-              <label className="label text-[11px]">Fibras (g) — opcional</label>
-              <input className="input" type="number" value={fiber} onChange={e => setFiber(e.target.value)} placeholder="0" min="0" step="0.1" />
-            </div>
-          </div>
-        </div>
-
-        {/* Serving unit */}
+        {/* Serving unit — vem ANTES dos macros */}
         <div className="border border-zinc-800 rounded-xl p-3 space-y-3">
           <div className="flex items-center justify-between">
             <div>
@@ -182,23 +177,66 @@ export default function CustomFoodModal({ open, onClose, existing, onSave }) {
                   <div className="flex items-center gap-2">
                     <input className="input flex-1" type="number" value={servingGrams}
                       onChange={e => setServingGrams(e.target.value)}
-                      placeholder="Ex: 120" min="0.1" step="0.1" />
+                      placeholder="Ex: 40" min="0.1" step="0.1" />
                     <span className="text-sm text-zinc-400 flex-shrink-0">g</span>
                   </div>
-                  {servingGrams && calories && (
-                    <p className="text-xs text-zinc-500 mt-1">
-                      → 1 {finalUnit} = ~{Math.round((parseFloat(calories) / 100) * parseFloat(servingGrams))} kcal
-                    </p>
-                  )}
                 </div>
               )}
             </div>
           )}
         </div>
 
+        {/* Macros */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="label mb-0">Macros {macroLabel}</p>
+            {canToggleMode && (
+              <div className="flex gap-1">
+                <button type="button"
+                  onClick={() => setMacroMode('per100g')}
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${macroMode === 'per100g' ? 'bg-violet-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>
+                  /100g
+                </button>
+                <button type="button"
+                  onClick={() => setMacroMode('perServing')}
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${macroMode === 'perServing' ? 'bg-violet-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>
+                  /1 {finalUnit}
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="label text-[11px]">Calorias (kcal) *</label>
+              <input className="input" type="number" value={calories} onChange={e => setCalories(e.target.value)} placeholder="0" min="0" />
+            </div>
+            <div>
+              <label className="label text-[11px]">Proteína (g)</label>
+              <input className="input" type="number" value={protein} onChange={e => setProtein(e.target.value)} placeholder="0" min="0" step="0.1" />
+            </div>
+            <div>
+              <label className="label text-[11px]">Carboidratos (g)</label>
+              <input className="input" type="number" value={carbs} onChange={e => setCarbs(e.target.value)} placeholder="0" min="0" step="0.1" />
+            </div>
+            <div>
+              <label className="label text-[11px]">Gorduras (g)</label>
+              <input className="input" type="number" value={fat} onChange={e => setFat(e.target.value)} placeholder="0" min="0" step="0.1" />
+            </div>
+            <div className="col-span-2">
+              <label className="label text-[11px]">Fibras (g) — opcional</label>
+              <input className="input" type="number" value={fiber} onChange={e => setFiber(e.target.value)} placeholder="0" min="0" step="0.1" />
+            </div>
+          </div>
+          {previewKcal !== null && needsGrams && (
+            <p className="text-xs text-zinc-500 mt-2">
+              → 1 {finalUnit} = ~{previewKcal} kcal
+            </p>
+          )}
+        </div>
+
         <button
           onClick={handleSave}
-          disabled={!isValid}
+          disabled={!name.trim() || !calories}
           className="btn-primary w-full py-2.5 disabled:opacity-40"
         >
           {existing ? 'Salvar alterações' : 'Criar alimento'}
