@@ -1,6 +1,6 @@
 // Abstraction layer — localStorage as local cache, synced to Supabase on every write
 
-import { pushKey } from './supabaseSync'
+import { pushKey, pushSharedItem, deleteSharedItem } from './supabaseSync'
 
 const KEYS = {
   profile:     'nt_profile',
@@ -44,11 +44,13 @@ export function saveCustomFood(food) {
   if (idx >= 0) foods[idx] = food
   else foods.push(food)
   set(KEYS.customFoods, foods)
+  pushSharedItem('custom_food', food).catch(() => {}) // share with all users
 }
 
 export function deleteCustomFood(id) {
   const foods = getCustomFoods().filter(f => f.id !== id)
   set(KEYS.customFoods, foods)
+  deleteSharedItem(id).catch(() => {})
 }
 
 // --- Recipes ---
@@ -62,11 +64,13 @@ export function saveRecipe(recipe) {
   if (idx >= 0) recipes[idx] = recipe
   else recipes.push(recipe)
   set(KEYS.recipes, recipes)
+  pushSharedItem('recipe', recipe).catch(() => {}) // share with all users
 }
 
 export function deleteRecipe(id) {
   const recipes = getRecipes().filter(r => r.id !== id)
   set(KEYS.recipes, recipes)
+  deleteSharedItem(id).catch(() => {})
 }
 
 // --- Daily logs ---

@@ -65,6 +65,49 @@ export async function pushAllToSupabase() {
   await supabase.from('user_data').upsert(rows).catch(console.error)
 }
 
+// ─── SHARED ITEMS (custom foods + recipes visible to all users) ───────────────
+
+export async function pushSharedItem(type, item) {
+  const userId = await getUserId()
+  if (!userId) return
+  await supabase.from('shared_items').upsert({
+    id: item.id, type, created_by: userId,
+    data: item, updated_at: new Date().toISOString(),
+  }).catch(e => console.error('[sync] pushSharedItem:', e))
+}
+
+export async function deleteSharedItem(id) {
+  await supabase.from('shared_items').delete().eq('id', id)
+    .catch(e => console.error('[sync] deleteSharedItem:', e))
+}
+
+// Pull all shared custom foods + recipes and merge into localStorage
+export async function pullSharedItems() {
+  const { data, error } = await supabase
+    .from('shared_items').select('id, type, data')
+  if (error || !data || data.length === 0) return
+
+  const sharedFoods   = data.filter(r => r.type === 'custom_food').map(r => r.data)
+  const sharedRecipes = data.filter(r => r.type === 'recipe').map(r => r.data)
+
+  // Merge: shared items are the source of truth; add any local-only items on top
+  function mergeById(shared, localRaw) {
+    const local = (() => { try { return JSON.parse(localRaw || '[]') } catch { return [] } })()
+    const map = new Map(shared.map(i => [i.id, i]))
+    local.forEach(i => { if (!map.has(i.id)) map.set(i.id, i) })
+    return [...map.values()]
+  }
+
+  if (sharedFoods.length > 0) {
+    const merged = mergeById(sharedFoods, localStorage.getItem('nt_custom_foods'))
+    localStorage.setItem('nt_custom_foods', JSON.stringify(merged))
+  }
+  if (sharedRecipes.length > 0) {
+    const merged = mergeById(sharedRecipes, localStorage.getItem('nt_recipes'))
+    localStorage.setItem('nt_recipes', JSON.stringify(merged))
+  }
+}
+
 // ─── CLEAR LOCAL ──────────────────────────────────────────────────────────────
 export function clearLocalUserData() {
   clearCachedUserId()

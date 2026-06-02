@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
-import { pushAllToSupabase, clearLocalUserData, setCachedUserId, SYNC_KEYS } from '../utils/supabaseSync'
+import { pushAllToSupabase, clearLocalUserData, setCachedUserId, pullSharedItems, SYNC_KEYS } from '../utils/supabaseSync'
 
 const AuthContext = createContext(null)
 
@@ -44,6 +44,9 @@ async function pullForUser(userId) {
       await supabase.from('user_data').upsert(rows).catch(console.error)
     }
   }
+
+  // Always merge shared foods + recipes from all users
+  await pullSharedItems().catch(console.error)
 }
 
 export function AuthProvider({ children }) {
