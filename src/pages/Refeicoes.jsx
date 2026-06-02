@@ -107,11 +107,11 @@ function FoodResults({ items, onSelect, onClose }) {
   const serving = selected?.serving
   const canServing = serving && !['g', 'mL'].includes(serving.unit)
 
-  // Reset serving toggle when selecting a new food
   function handleSelect(food) {
     setSelected(food)
-    setByServing(false)
-    setQuantity(food.serving && !['g','mL'].includes(food.serving?.unit) ? '1' : '100')
+    const hasCustomServing = food.serving && !['g', 'mL'].includes(food.serving?.unit)
+    setByServing(hasCustomServing)
+    setQuantity(hasCustomServing ? '1' : '100')
   }
 
   function handleAdd() {
