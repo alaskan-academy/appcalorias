@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Trash2, Search, ChevronDown, ChevronUp, Copy, AlertTriangle, Pencil } from 'lucide-react'
+import { Plus, Trash2, Search, ChevronDown, ChevronUp, Copy, AlertTriangle } from 'lucide-react'
 import { format, subDays } from 'date-fns'
 import { useApp } from '../context/AppContext'
 import { searchFoods, searchOpenFoodFacts } from '../utils/usdaApi'
@@ -8,17 +8,14 @@ import { DEFAULT_MEALS } from '../utils/constants'
 import { getDayLog, getRecentFoods, saveRecentFood } from '../utils/storage'
 import Modal from '../components/ui/Modal'
 import ProgressBar from '../components/ui/ProgressBar'
-import CustomFoodModal from '../components/ui/CustomFoodModal'
 
 function FoodSearchModal({ open, onClose, onSelect }) {
-  const { customFoods, recipes, addCustomFood, removeCustomFood } = useApp()
+  const { customFoods, recipes } = useApp()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [tab, setTab] = useState('recent') // recent | search | off | custom | recipes
-  const [editingFood, setEditingFood] = useState(null)  // food being edited or true for new
-  const [customModalOpen, setCustomModalOpen] = useState(false)
+  const [tab, setTab] = useState('recent')
 
   async function handleSearch(e) {
     e.preventDefault()
@@ -39,21 +36,10 @@ function FoodSearchModal({ open, onClose, onSelect }) {
     setQuery(''); setResults([]); setError(null); onClose()
   }
 
-  function handleSaveCustomFood(food) {
-    addCustomFood(food)
-    setCustomModalOpen(false)
-    setEditingFood(null)
-  }
-
-  function handleDeleteCustomFood(id) {
-    removeCustomFood(id)
-  }
-
   const recentFoods = getRecentFoods()
   const displayedResults =
     tab === 'search' || tab === 'off' ? results :
-    tab === 'recent'  ? recentFoods :
-    []
+    tab === 'recent' ? recentFoods : []
 
   const TABS = [
     ['recent', 'Recentes'],
@@ -64,91 +50,52 @@ function FoodSearchModal({ open, onClose, onSelect }) {
   ]
 
   return (
-    <>
-      <Modal open={open} onClose={handleClose} title="Adicionar alimento" size="lg">
-        <div className="space-y-4">
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-            {TABS.map(([t, l]) => (
-              <button key={t} onClick={() => { setTab(t); setResults([]) }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap flex-shrink-0 ${tab === t ? 'bg-violet-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>
-                {l}
-              </button>
-            ))}
-          </div>
-
-          {(tab === 'search' || tab === 'off') && (
-            <form onSubmit={handleSearch} className="flex gap-2">
-              <input className="input flex-1" value={query} onChange={e => setQuery(e.target.value)}
-                placeholder={tab === 'off' ? 'Ex: leite integral, feijão carioca...' : 'Ex: frango grelhado, arroz cozido...'}
-                autoFocus />
-              <button type="submit" className="btn-primary flex items-center gap-1.5">
-                <Search size={14} /> Buscar
-              </button>
-            </form>
-          )}
-
-          {/* Meus alimentos: list + create/edit */}
-          {tab === 'custom' && (
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <p className="text-xs text-zinc-500">{customFoods.length} alimentos cadastrados</p>
-                <button onClick={() => { setEditingFood(null); setCustomModalOpen(true) }}
-                  className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors font-medium">
-                  <Plus size={12} /> Novo alimento
-                </button>
-              </div>
-              {customFoods.length === 0
-                ? <p className="text-zinc-500 text-sm text-center py-6">Nenhum alimento cadastrado ainda</p>
-                : <div className="max-h-64 overflow-y-auto space-y-1">
-                    {customFoods.map(food => (
-                      <div key={food.id} className="flex items-center gap-1 group">
-                        <button className="flex-1 text-left px-3 py-2 rounded-xl hover:bg-zinc-800 transition-colors"
-                          onClick={() => {/* handled by FoodResults below */}}>
-                          <p className="text-sm font-medium text-white truncate">{food.name}</p>
-                          <p className="text-xs text-zinc-500">
-                            {food.per100g.calories} kcal/100g
-                            {food.serving && !['g','mL'].includes(food.serving.unit)
-                              ? ` · 1 ${food.serving.unit} = ${food.serving.grams}g` : ''}
-                          </p>
-                        </button>
-                        <button onClick={() => { setEditingFood(food); setCustomModalOpen(true) }}
-                          className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-600 hover:text-violet-400 transition-colors opacity-0 group-hover:opacity-100">
-                          <Pencil size={13} />
-                        </button>
-                        <button onClick={() => handleDeleteCustomFood(food.id)}
-                          className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-              }
-              {/* FoodResults handles selection + quantity for custom tab */}
-              <FoodResults items={customFoods} onSelect={onSelect} onClose={handleClose} />
-            </div>
-          )}
-
-          {tab === 'recent' && recentFoods.length === 0 && (
-            <p className="text-zinc-500 text-sm text-center py-6">Nenhum alimento recente ainda</p>
-          )}
-
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-          {loading && <p className="text-zinc-400 text-sm text-center py-4">Buscando...</p>}
-
-          {tab === 'recipes' && <RecipeResults onSelect={onSelect} onClose={handleClose} />}
-          {tab !== 'recipes' && tab !== 'custom' && (
-            <FoodResults items={displayedResults} onSelect={onSelect} onClose={handleClose} />
-          )}
+    <Modal open={open} onClose={handleClose} title="Adicionar alimento" size="lg">
+      <div className="space-y-4">
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+          {TABS.map(([t, l]) => (
+            <button key={t} onClick={() => { setTab(t); setResults([]) }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap flex-shrink-0 ${tab === t ? 'bg-violet-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>
+              {l}
+            </button>
+          ))}
         </div>
-      </Modal>
 
-      <CustomFoodModal
-        open={customModalOpen}
-        onClose={() => { setCustomModalOpen(false); setEditingFood(null) }}
-        existing={editingFood}
-        onSave={handleSaveCustomFood}
-      />
-    </>
+        {(tab === 'search' || tab === 'off') && (
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <input className="input flex-1" value={query} onChange={e => setQuery(e.target.value)}
+              placeholder={tab === 'off' ? 'Ex: leite integral, feijão carioca...' : 'Ex: frango grelhado, arroz cozido...'}
+              autoFocus />
+            <button type="submit" className="btn-primary flex items-center gap-1.5">
+              <Search size={14} /> Buscar
+            </button>
+          </form>
+        )}
+
+        {tab === 'custom' && customFoods.length === 0 && (
+          <p className="text-zinc-500 text-sm text-center py-6">
+            Nenhum alimento cadastrado. Crie em{' '}
+            <span className="text-violet-400">Configurações → Meus alimentos</span>.
+          </p>
+        )}
+
+        {tab === 'recent' && recentFoods.length === 0 && (
+          <p className="text-zinc-500 text-sm text-center py-6">Nenhum alimento recente ainda</p>
+        )}
+
+        {error && <p className="text-red-400 text-sm">{error}</p>}
+        {loading && <p className="text-zinc-400 text-sm text-center py-4">Buscando...</p>}
+
+        {tab === 'recipes'
+          ? <RecipeResults onSelect={onSelect} onClose={handleClose} />
+          : <FoodResults
+              items={tab === 'custom' ? customFoods : displayedResults}
+              onSelect={onSelect}
+              onClose={handleClose}
+            />
+        }
+      </div>
+    </Modal>
   )
 }
 

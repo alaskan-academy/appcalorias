@@ -1,62 +1,11 @@
 import { useState } from 'react'
-import { Plus, Trash2, Save, User, Target, Utensils, FlaskConical, Droplets, BookOpen, ChevronDown, ChevronUp, Scale, Download, Activity } from 'lucide-react'
+import { Plus, Trash2, Save, User, Target, Utensils, FlaskConical, Droplets, BookOpen, ChevronDown, ChevronUp, Scale, Download, Activity, Pencil } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { calculateDailyCalories, calculateMacros, calculateWaterIntake, calculateActivityGoals } from '../utils/calculations'
 import { GOALS, ACTIVITY_LEVELS, DEFAULT_MEALS } from '../utils/constants'
 import { exportLogsCSV } from '../utils/storage'
-import Modal from '../components/ui/Modal'
 import { RecipeModal } from '../components/recipes/RecipeModal'
-
-function CustomFoodModal({ open, onClose, existing }) {
-  const { addCustomFood } = useApp()
-  const [form, setForm] = useState(existing ?? { name: '', per100g: { calories: '', protein: '', carbs: '', fat: '', fiber: '' } })
-
-  function setField(field, val) {
-    setForm(f => ({ ...f, per100g: { ...f.per100g, [field]: val } }))
-  }
-
-  function handleSave() {
-    if (!form.name.trim()) return
-    addCustomFood({
-      id: existing?.id ?? `custom_${Date.now()}`,
-      name: form.name.trim(),
-      source: 'custom',
-      per100g: {
-        calories: parseFloat(form.per100g.calories) || 0,
-        protein:  parseFloat(form.per100g.protein)  || 0,
-        carbs:    parseFloat(form.per100g.carbs)    || 0,
-        fat:      parseFloat(form.per100g.fat)      || 0,
-        fiber:    parseFloat(form.per100g.fiber)    || 0,
-      },
-    })
-    onClose()
-  }
-
-  return (
-    <Modal open={open} onClose={onClose} title={existing ? 'Editar alimento' : 'Novo alimento'}>
-      <div className="space-y-4">
-        <div>
-          <label className="label">Nome do alimento</label>
-          <input className="input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            placeholder="Ex: Pão caseiro integral" autoFocus />
-        </div>
-        <p className="text-xs text-zinc-500 font-medium">Valores por 100g</p>
-        <div className="grid grid-cols-2 gap-3">
-          {[['calories', 'Calorias (kcal)'], ['protein', 'Proteína (g)'], ['carbs', 'Carboidratos (g)'], ['fat', 'Gordura (g)'], ['fiber', 'Fibra (g)']].map(([field, label]) => (
-            <div key={field}>
-              <label className="label">{label}</label>
-              <input className="input" type="number" value={form.per100g[field]}
-                onChange={e => setField(field, e.target.value)} placeholder="0" min="0" step="0.1" />
-            </div>
-          ))}
-        </div>
-        <button onClick={handleSave} disabled={!form.name.trim()} className="btn-primary w-full disabled:opacity-40">
-          Salvar alimento
-        </button>
-      </div>
-    </Modal>
-  )
-}
+import CustomFoodModal from '../components/ui/CustomFoodModal'
 
 function RecipesSection() {
   const { recipes, removeRecipe } = useApp()
@@ -160,9 +109,15 @@ function RecipesSection() {
 }
 
 export default function Config() {
-  const { profile, updateProfile, customFoods, removeCustomFood } = useApp()
-  const [foodModal, setFoodModal] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const { profile, updateProfile, customFoods, addCustomFood, removeCustomFood } = useApp()
+  const [foodModal, setFoodModal]     = useState(false)
+  const [editingFood, setEditingFood] = useState(null)
+  const [saved, setSaved]             = useState(false)
+
+  function openNewFood()      { setEditingFood(null); setFoodModal(true) }
+  function openEditFood(food) { setEditingFood(food); setFoodModal(true) }
+  function closeFoodModal()   { setFoodModal(false); setEditingFood(null) }
+  function handleSaveFood(food) { addCustomFood(food); closeFoodModal() }
 
   const [form, setForm] = useState(() => {
     const weeksLeft = profile?.bodyGoal?.targetDate
@@ -572,7 +527,7 @@ export default function Config() {
             <FlaskConical size={15} className="text-violet-400" />
             <p className="text-sm font-semibold text-white">Meus alimentos</p>
           </div>
-          <button onClick={() => setFoodModal(true)} className="btn-primary flex items-center gap-1.5 text-xs">
+          <button onClick={openNewFood} className="btn-primary flex items-center gap-1.5 text-xs">
             <Plus size={12} /> Novo
           </button>
         </div>
@@ -585,9 +540,15 @@ export default function Config() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-zinc-200">{food.name}</p>
                   <p className="text-xs text-zinc-500">
-                    {food.per100g.calories} kcal · P {food.per100g.protein}g · C {food.per100g.carbs}g · G {food.per100g.fat}g (por 100g)
+                    {food.per100g.calories} kcal · P {food.per100g.protein}g · C {food.per100g.carbs}g · G {food.per100g.fat}g /100g
+                    {food.serving && !['g','mL'].includes(food.serving.unit)
+                      ? ` · 1 ${food.serving.unit} = ${food.serving.grams}g` : ''}
                   </p>
                 </div>
+                <button onClick={() => openEditFood(food)}
+                  className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-zinc-700 text-zinc-500 hover:text-violet-400 transition-all">
+                  <Pencil size={13} />
+                </button>
                 <button onClick={() => removeCustomFood(food.id)}
                   className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/20 text-zinc-500 hover:text-red-400 transition-all">
                   <Trash2 size={13} />
@@ -606,7 +567,7 @@ export default function Config() {
         <Save size={16} /> {saved ? 'Salvo!' : 'Salvar configurações'}
       </button>
 
-      <CustomFoodModal open={foodModal} onClose={() => setFoodModal(false)} />
+      <CustomFoodModal open={foodModal} onClose={closeFoodModal} existing={editingFood} onSave={handleSaveFood} />
     </div>
   )
 }
