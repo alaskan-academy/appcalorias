@@ -84,8 +84,9 @@ export function IngredientSearch({ onAdd }) {
 
 export function RecipeModal({ open, onClose, existing }) {
   const { addRecipe } = useApp()
-  const [name, setName] = useState(existing?.name ?? '')
+  const [name, setName]             = useState(existing?.name ?? '')
   const [totalWeight, setTotalWeight] = useState(existing?.totalWeight ? String(existing.totalWeight) : '')
+  const [portions, setPortions]     = useState(existing?.serving?.portions ? String(existing.serving.portions) : '')
   const [ingredients, setIngredients] = useState(existing?.ingredients ?? [])
   const [showSearch, setShowSearch] = useState(false)
 
@@ -98,12 +99,16 @@ export function RecipeModal({ open, onClose, existing }) {
 
   const sumWeight = ingredients.reduce((s, i) => s + (i.quantity ?? 0), 0)
 
+  const finalWeight = parseFloat(totalWeight) || sumWeight
+  const numPortions = parseFloat(portions)
+  const gramsPerPortion = numPortions > 0 ? Math.round(finalWeight / numPortions) : null
+
   function handleSave() {
     if (!name.trim() || ingredients.length === 0) return
     addRecipe({
       id: existing?.id ?? Date.now().toString(),
       name: name.trim(),
-      totalWeight: parseFloat(totalWeight) || sumWeight,
+      totalWeight: finalWeight,
       ingredients,
       totalMacros: {
         calories: Math.round(totalMacros.calories * 10) / 10,
@@ -111,6 +116,7 @@ export function RecipeModal({ open, onClose, existing }) {
         carbs:    Math.round(totalMacros.carbs    * 10) / 10,
         fat:      Math.round(totalMacros.fat      * 10) / 10,
       },
+      serving: numPortions > 0 ? { portions: numPortions } : undefined,
     })
     onClose()
   }
@@ -124,11 +130,22 @@ export function RecipeModal({ open, onClose, existing }) {
             placeholder="Ex: Frango com legumes" autoFocus />
         </div>
 
-        <div>
-          <label className="label">Rendimento total (g) — opcional</label>
-          <input className="input" type="number" value={totalWeight}
-            onChange={e => setTotalWeight(e.target.value)}
-            placeholder={`${sumWeight || 0} g (soma dos ingredientes)`} />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Rendimento total (g)</label>
+            <input className="input" type="number" value={totalWeight}
+              onChange={e => setTotalWeight(e.target.value)}
+              placeholder={`${sumWeight || 0} g`} />
+          </div>
+          <div>
+            <label className="label">Número de porções</label>
+            <input className="input" type="number" value={portions}
+              onChange={e => setPortions(e.target.value)}
+              placeholder="Ex: 4" min="1" step="1" />
+            {gramsPerPortion && (
+              <p className="text-xs text-zinc-500 mt-0.5">1 porção ≈ {gramsPerPortion}g</p>
+            )}
+          </div>
         </div>
 
         <div>

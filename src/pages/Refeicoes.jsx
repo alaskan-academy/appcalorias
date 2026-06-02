@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Trash2, Search, ChevronDown, ChevronUp, Copy, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, Search, ChevronDown, ChevronUp, Copy, AlertTriangle, Pencil } from 'lucide-react'
 import { format, subDays } from 'date-fns'
 import { useApp } from '../context/AppContext'
 import { searchFoods, searchOpenFoodFacts } from '../utils/usdaApi'
@@ -8,14 +8,17 @@ import { DEFAULT_MEALS } from '../utils/constants'
 import { getDayLog, getRecentFoods, saveRecentFood } from '../utils/storage'
 import Modal from '../components/ui/Modal'
 import ProgressBar from '../components/ui/ProgressBar'
+import CustomFoodModal from '../components/ui/CustomFoodModal'
 
 function FoodSearchModal({ open, onClose, onSelect }) {
-  const { customFoods, recipes } = useApp()
+  const { customFoods, recipes, addCustomFood, removeCustomFood } = useApp()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('recent') // recent | search | off | custom | recipes
+  const [editingFood, setEditingFood] = useState(null)  // food being edited or true for new
+  const [customModalOpen, setCustomModalOpen] = useState(false)
 
   async function handleSearch(e) {
     e.preventDefault()
@@ -33,16 +36,22 @@ function FoodSearchModal({ open, onClose, onSelect }) {
   }
 
   function handleClose() {
-    setQuery('')
-    setResults([])
-    setError(null)
-    onClose()
+    setQuery(''); setResults([]); setError(null); onClose()
+  }
+
+  function handleSaveCustomFood(food) {
+    addCustomFood(food)
+    setCustomModalOpen(false)
+    setEditingFood(null)
+  }
+
+  function handleDeleteCustomFood(id) {
+    removeCustomFood(id)
   }
 
   const recentFoods = getRecentFoods()
   const displayedResults =
     tab === 'search' || tab === 'off' ? results :
-    tab === 'custom'  ? customFoods :
     tab === 'recent'  ? recentFoods :
     []
 
@@ -55,56 +64,125 @@ function FoodSearchModal({ open, onClose, onSelect }) {
   ]
 
   return (
-    <Modal open={open} onClose={handleClose} title="Adicionar alimento" size="lg">
-      <div className="space-y-4">
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-          {TABS.map(([t, l]) => (
-            <button key={t} onClick={() => { setTab(t); setResults([]) }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap flex-shrink-0 ${tab === t ? 'bg-violet-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>
-              {l}
-            </button>
-          ))}
+    <>
+      <Modal open={open} onClose={handleClose} title="Adicionar alimento" size="lg">
+        <div className="space-y-4">
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+            {TABS.map(([t, l]) => (
+              <button key={t} onClick={() => { setTab(t); setResults([]) }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap flex-shrink-0 ${tab === t ? 'bg-violet-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+
+          {(tab === 'search' || tab === 'off') && (
+            <form onSubmit={handleSearch} className="flex gap-2">
+              <input className="input flex-1" value={query} onChange={e => setQuery(e.target.value)}
+                placeholder={tab === 'off' ? 'Ex: leite integral, feijão carioca...' : 'Ex: frango grelhado, arroz cozido...'}
+                autoFocus />
+              <button type="submit" className="btn-primary flex items-center gap-1.5">
+                <Search size={14} /> Buscar
+              </button>
+            </form>
+          )}
+
+          {/* Meus alimentos: list + create/edit */}
+          {tab === 'custom' && (
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <p className="text-xs text-zinc-500">{customFoods.length} alimentos cadastrados</p>
+                <button onClick={() => { setEditingFood(null); setCustomModalOpen(true) }}
+                  className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors font-medium">
+                  <Plus size={12} /> Novo alimento
+                </button>
+              </div>
+              {customFoods.length === 0
+                ? <p className="text-zinc-500 text-sm text-center py-6">Nenhum alimento cadastrado ainda</p>
+                : <div className="max-h-64 overflow-y-auto space-y-1">
+                    {customFoods.map(food => (
+                      <div key={food.id} className="flex items-center gap-1 group">
+                        <button className="flex-1 text-left px-3 py-2 rounded-xl hover:bg-zinc-800 transition-colors"
+                          onClick={() => {/* handled by FoodResults below */}}>
+                          <p className="text-sm font-medium text-white truncate">{food.name}</p>
+                          <p className="text-xs text-zinc-500">
+                            {food.per100g.calories} kcal/100g
+                            {food.serving && !['g','mL'].includes(food.serving.unit)
+                              ? ` · 1 ${food.serving.unit} = ${food.serving.grams}g` : ''}
+                          </p>
+                        </button>
+                        <button onClick={() => { setEditingFood(food); setCustomModalOpen(true) }}
+                          className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-600 hover:text-violet-400 transition-colors opacity-0 group-hover:opacity-100">
+                          <Pencil size={13} />
+                        </button>
+                        <button onClick={() => handleDeleteCustomFood(food.id)}
+                          className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+              }
+              {/* FoodResults handles selection + quantity for custom tab */}
+              <FoodResults items={customFoods} onSelect={onSelect} onClose={handleClose} />
+            </div>
+          )}
+
+          {tab === 'recent' && recentFoods.length === 0 && (
+            <p className="text-zinc-500 text-sm text-center py-6">Nenhum alimento recente ainda</p>
+          )}
+
+          {error && <p className="text-red-400 text-sm">{error}</p>}
+          {loading && <p className="text-zinc-400 text-sm text-center py-4">Buscando...</p>}
+
+          {tab === 'recipes' && <RecipeResults onSelect={onSelect} onClose={handleClose} />}
+          {tab !== 'recipes' && tab !== 'custom' && (
+            <FoodResults items={displayedResults} onSelect={onSelect} onClose={handleClose} />
+          )}
         </div>
+      </Modal>
 
-        {(tab === 'search' || tab === 'off') && (
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <input className="input flex-1" value={query} onChange={e => setQuery(e.target.value)}
-              placeholder={tab === 'off' ? 'Ex: leite integral, feijão carioca...' : 'Ex: frango grelhado, arroz cozido...'}
-              autoFocus />
-            <button type="submit" className="btn-primary flex items-center gap-1.5">
-              <Search size={14} /> Buscar
-            </button>
-          </form>
-        )}
-
-        {tab === 'recent' && recentFoods.length === 0 && (
-          <p className="text-zinc-500 text-sm text-center py-6">Nenhum alimento recente ainda</p>
-        )}
-
-        {error && <p className="text-red-400 text-sm">{error}</p>}
-        {loading && <p className="text-zinc-400 text-sm text-center py-4">Buscando...</p>}
-
-        {tab === 'recipes' ? (
-          <RecipeResults onSelect={onSelect} onClose={handleClose} />
-        ) : (
-          <FoodResults items={displayedResults} onSelect={onSelect} onClose={handleClose} />
-        )}
-      </div>
-    </Modal>
+      <CustomFoodModal
+        open={customModalOpen}
+        onClose={() => { setCustomModalOpen(false); setEditingFood(null) }}
+        existing={editingFood}
+        onSave={handleSaveCustomFood}
+      />
+    </>
   )
 }
 
 function FoodResults({ items, onSelect, onClose }) {
   const [selected, setSelected] = useState(null)
   const [quantity, setQuantity] = useState('100')
+  const [byServing, setByServing] = useState(false)
+
+  const serving = selected?.serving
+  const canServing = serving && !['g', 'mL'].includes(serving.unit)
+
+  // Reset serving toggle when selecting a new food
+  function handleSelect(food) {
+    setSelected(food)
+    setByServing(false)
+    setQuantity(food.serving && !['g','mL'].includes(food.serving?.unit) ? '1' : '100')
+  }
 
   function handleAdd() {
     if (!selected) return
     const qty = parseFloat(quantity)
     if (!qty || qty <= 0) return
-    const scaled = scaleMacros(selected.per100g, qty)
+
+    let grams = qty
+    let unit = 'g'
+
+    if (byServing && serving) {
+      grams = qty * serving.grams
+      unit  = serving.unit
+    }
+
+    const scaled = scaleMacros(selected.per100g, grams)
     saveRecentFood(selected)
-    onSelect({ ...scaled, name: selected.name, quantity: qty, unit: 'g', source: selected.source || 'usda', id: Date.now().toString() })
+    onSelect({ ...scaled, name: selected.name, quantity: qty, unit, source: selected.source || 'usda', id: Date.now().toString() })
     onClose()
   }
 
@@ -114,22 +192,51 @@ function FoodResults({ items, onSelect, onClose }) {
     <div className="space-y-2">
       <div className="max-h-64 overflow-y-auto space-y-1">
         {items.map(food => (
-          <button key={food.id} onClick={() => setSelected(food)}
+          <button key={food.id} onClick={() => handleSelect(food)}
             className={`w-full text-left px-3 py-2.5 rounded-xl transition-colors ${selected?.id === food.id ? 'bg-violet-600/20 border border-violet-500/30' : 'hover:bg-zinc-800'}`}>
             <p className="text-sm font-medium text-white truncate">{food.name}</p>
             <p className="text-xs text-zinc-500">
-              {food.per100g.calories} kcal · P {food.per100g.protein}g · C {food.per100g.carbs}g · G {food.per100g.fat}g por 100g
+              {food.per100g.calories} kcal · P {food.per100g.protein}g · C {food.per100g.carbs}g · G {food.per100g.fat}g /100g
+              {food.serving && !['g','mL'].includes(food.serving.unit)
+                ? ` · 1 ${food.serving.unit} = ${food.serving.grams}g`
+                : ''}
             </p>
           </button>
         ))}
       </div>
+
       {selected && (
-        <div className="border-t border-zinc-800 pt-3 flex gap-2 items-end">
-          <div className="flex-1">
-            <label className="label">Quantidade (g)</label>
-            <input className="input" type="number" value={quantity} onChange={e => setQuantity(e.target.value)} min="1" />
+        <div className="border-t border-zinc-800 pt-3 space-y-2">
+          {/* Toggle por porção / por peso */}
+          {canServing && (
+            <div className="flex gap-1.5">
+              <button onClick={() => { setByServing(false); setQuantity('100') }}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${!byServing ? 'bg-violet-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>
+                Por peso (g)
+              </button>
+              <button onClick={() => { setByServing(true); setQuantity('1') }}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${byServing ? 'bg-violet-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>
+                Por {serving.unit}
+              </button>
+            </div>
+          )}
+
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <label className="label">
+                {byServing ? `Quantidade (${serving.unit})` : 'Quantidade (g)'}
+              </label>
+              <input className="input" type="number" value={quantity}
+                onChange={e => setQuantity(e.target.value)} min="0.1" step={byServing ? '0.5' : '1'} />
+              {byServing && quantity && (
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  = {Math.round(parseFloat(quantity) * serving.grams)}g ·{' '}
+                  ~{Math.round((selected.per100g.calories / 100) * parseFloat(quantity) * serving.grams)} kcal
+                </p>
+              )}
+            </div>
+            <button onClick={handleAdd} className="btn-primary">Adicionar</button>
           </div>
-          <button onClick={handleAdd} className="btn-primary">Adicionar</button>
         </div>
       )}
     </div>
@@ -139,13 +246,28 @@ function FoodResults({ items, onSelect, onClose }) {
 function RecipeResults({ onSelect, onClose }) {
   const { recipes } = useApp()
   const [selected, setSelected] = useState(null)
-  const [portion, setPortion] = useState('100')
+  const [qty, setQty]           = useState('1')
+  const [byPortion, setByPortion] = useState(true)
+
+  const hasPortions = selected?.serving?.portions > 0
+  const gramsPerPortion = hasPortions
+    ? selected.totalWeight / selected.serving.portions
+    : null
+
+  function handleSelect(r) {
+    setSelected(r)
+    setByPortion(!!r.serving?.portions)
+    setQty(r.serving?.portions ? '1' : '100')
+  }
 
   function handleAdd() {
     if (!selected) return
-    const qty = parseFloat(portion)
-    if (!qty || qty <= 0) return
-    onSelect({ _recipe: selected, portionGrams: qty })
+    const q = parseFloat(qty)
+    if (!q || q <= 0) return
+    const portionGrams = byPortion && gramsPerPortion
+      ? q * gramsPerPortion
+      : q
+    onSelect({ _recipe: selected, portionGrams })
     onClose()
   }
 
@@ -155,20 +277,47 @@ function RecipeResults({ onSelect, onClose }) {
     <div className="space-y-2">
       <div className="max-h-64 overflow-y-auto space-y-1">
         {recipes.map(r => (
-          <button key={r.id} onClick={() => setSelected(r)}
+          <button key={r.id} onClick={() => handleSelect(r)}
             className={`w-full text-left px-3 py-2.5 rounded-xl transition-colors ${selected?.id === r.id ? 'bg-violet-600/20 border border-violet-500/30' : 'hover:bg-zinc-800'}`}>
             <p className="text-sm font-medium text-white">{r.name}</p>
-            <p className="text-xs text-zinc-500">{r.totalMacros.calories} kcal total · {r.totalWeight}g rendimento</p>
+            <p className="text-xs text-zinc-500">
+              {r.totalMacros.calories} kcal total · {r.totalWeight}g
+              {r.serving?.portions ? ` · ${r.serving.portions} porções` : ''}
+            </p>
           </button>
         ))}
       </div>
+
       {selected && (
-        <div className="border-t border-zinc-800 pt-3 flex gap-2 items-end">
-          <div className="flex-1">
-            <label className="label">Porção consumida (g)</label>
-            <input className="input" type="number" value={portion} onChange={e => setPortion(e.target.value)} min="1" />
+        <div className="border-t border-zinc-800 pt-3 space-y-2">
+          {hasPortions && (
+            <div className="flex gap-1.5">
+              <button onClick={() => { setByPortion(true); setQty('1') }}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${byPortion ? 'bg-violet-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>
+                Por porção
+              </button>
+              <button onClick={() => { setByPortion(false); setQty('100') }}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${!byPortion ? 'bg-violet-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>
+                Por peso (g)
+              </button>
+            </div>
+          )}
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <label className="label">
+                {byPortion && hasPortions ? 'Número de porções' : 'Porção consumida (g)'}
+              </label>
+              <input className="input" type="number" value={qty}
+                onChange={e => setQty(e.target.value)} min="0.5" step="0.5" />
+              {byPortion && hasPortions && qty && (
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  = ~{Math.round(parseFloat(qty) * gramsPerPortion)}g ·{' '}
+                  ~{Math.round((selected.totalMacros.calories / selected.serving.portions) * parseFloat(qty))} kcal
+                </p>
+              )}
+            </div>
+            <button onClick={handleAdd} className="btn-primary">Adicionar</button>
           </div>
-          <button onClick={handleAdd} className="btn-primary">Adicionar</button>
         </div>
       )}
     </div>
