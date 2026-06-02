@@ -90,11 +90,11 @@ export async function pullSharedItems() {
   const sharedFoods   = data.filter(r => r.type === 'custom_food').map(r => r.data)
   const sharedRecipes = data.filter(r => r.type === 'recipe').map(r => r.data)
 
-  // Merge: shared items are the source of truth; add any local-only items on top
+  // Merge: local always wins (it is always equal or more recent than Supabase)
   function mergeById(shared, localRaw) {
     const local = (() => { try { return JSON.parse(localRaw || '[]') } catch { return [] } })()
     const map = new Map(shared.map(i => [i.id, i]))
-    local.forEach(i => { if (!map.has(i.id)) map.set(i.id, i) })
+    local.forEach(i => { map.set(i.id, i) }) // local overwrites shared
     return [...map.values()]
   }
 
