@@ -63,4 +63,12 @@ export const STRENGTH_EXERCISES = [
   { id: 'leg_raise',          name: 'Elevação de pernas',    muscle: 'core',      unit: 'reps' },
   { id: 'russian_twist',      name: 'Torção russa',          muscle: 'core',      unit: 'reps' },
   { id: 'cable_crunch',       name: 'Abdominal no cabo',     muscle: 'core',      unit: 'kg' },
+  // Cardio / Bem-estar
+  { id: 'cardio_general',     name: 'Cardio (geral)',        muscle: 'cardio',    unit: 'seg' },
+  { id: 'hiit_plan',          name: 'HIIT',                  muscle: 'cardio',    unit: 'seg' },
+  { id: 'walking_plan',       name: 'Caminhada',             muscle: 'cardio',    unit: 'seg' },
+  { id: 'yoga_plan',          name: 'Yoga',                  muscle: 'cardio',    unit: 'seg' },
+  { id: 'stretching_plan',    name: 'Alongamento',           muscle: 'cardio',    unit: 'seg' },
+  { id: 'breathing_plan',     name: 'Respiração',            muscle: 'cardio',    unit: 'seg' },
+  { id: 'guided_meditation_plan', name: 'Meditação guiada',  muscle: 'cardio',    unit: 'seg' },
 ]
