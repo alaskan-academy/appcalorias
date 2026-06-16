@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Plus, Trash2, ChevronDown, ChevronUp, Check, Dumbbell, BarChart2, Calendar, Play, X, TrendingUp, Clock, Heart } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronUp, Check, Dumbbell, BarChart2, Calendar, Play, X, TrendingUp, Clock, Heart, Pencil, ArrowUp, ArrowDown } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import {
   WEEK_DAYS, getTrainingPlan, saveTrainingPlan,
@@ -35,7 +35,7 @@ const TABS = [
 
 // ─── Add exercise to day modal ───────────────────────────────────────────────
 
-function AddExerciseModal({ open, onClose, onAdd }) {
+function AddExerciseModal({ open, onClose, onSave, existing }) {
   const [muscle, setMuscle] = useState('all')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(null)
@@ -44,7 +44,32 @@ function AddExerciseModal({ open, onClose, onAdd }) {
   const [weight, setWeight]   = useState('')
   const [duration, setDuration] = useState('')
   const [customName, setCustomName] = useState('')
+  const [customMuscle, setCustomMuscle] = useState('full_body')
   const [useCustom, setUseCustom] = useState(false)
+
+  // Pre-fill when editing an existing exercise
+  useEffect(() => {
+    if (!open) return
+    if (existing) {
+      const fromList = STRENGTH_EXERCISES.find(e => e.id === existing.exerciseId)
+      const isCustomEx = !fromList
+      setUseCustom(isCustomEx)
+      if (isCustomEx) {
+        setCustomName(existing.name ?? '')
+        setCustomMuscle(existing.muscle ?? 'full_body')
+        setSelected(null)
+      } else {
+        setSelected(existing.exerciseId)
+      }
+      setSets(String(existing.targetSets ?? 3))
+      setReps(String(existing.targetReps ?? 12))
+      setWeight(existing.targetWeight != null ? String(existing.targetWeight) : '')
+      setDuration(existing.targetDuration != null ? String(existing.targetDuration) : '')
+    } else {
+      setUseCustom(false); setSelected(null); setCustomName(''); setCustomMuscle('full_body')
+      setSets('3'); setReps('12'); setWeight(''); setDuration(''); setSearch(''); setMuscle('all')
+    }
+  }, [existing, open])
 
   const filtered = STRENGTH_EXERCISES.filter(e =>
     (muscle === 'all' || e.muscle === muscle) &&
@@ -54,13 +79,13 @@ function AddExerciseModal({ open, onClose, onAdd }) {
   const ex = useCustom ? null : selected ? STRENGTH_EXERCISES.find(e => e.id === selected) : null
   const unit = ex?.unit ?? 'kg'
 
-  function handleAdd() {
+  function handleSave() {
     const name = useCustom ? customName.trim() : ex?.name
     if (!name) return
-    onAdd({
-      exerciseId: useCustom ? `custom_${Date.now()}` : selected,
+    onSave({
+      exerciseId: existing?.exerciseId ?? (useCustom ? `custom_${Date.now()}` : selected),
       name,
-      muscle: ex?.muscle ?? 'full_body',
+      muscle: useCustom ? customMuscle : (ex?.muscle ?? 'full_body'),
       unit: ex?.unit ?? 'kg',
       targetSets:   parseInt(sets)   || 3,
       targetReps:   parseInt(reps)   || 12,
@@ -71,7 +96,7 @@ function AddExerciseModal({ open, onClose, onAdd }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Adicionar exercício ao dia" size="lg">
+    <Modal open={open} onClose={onClose} title={existing ? 'Editar exercício' : 'Adicionar exercício ao dia'} size="lg">
       <div className="space-y-4">
         <div className="flex gap-2">
           <button onClick={() => setUseCustom(false)}
@@ -85,10 +110,20 @@ function AddExerciseModal({ open, onClose, onAdd }) {
         </div>
 
         {useCustom ? (
-          <div>
-            <label className="label">Nome do exercício</label>
-            <input className="input" value={customName} onChange={e => setCustomName(e.target.value)}
-              placeholder="Ex: Agachamento búlgaro" autoFocus />
+          <div className="space-y-3">
+            <div>
+              <label className="label">Nome do exercício</label>
+              <input className="input" value={customName} onChange={e => setCustomName(e.target.value)}
+                placeholder="Ex: Agachamento búlgaro" autoFocus />
+            </div>
+            <div>
+              <label className="label">Grupo muscular</label>
+              <select className="input" value={customMuscle} onChange={e => setCustomMuscle(e.target.value)}>
+                {Object.entries(MUSCLE_GROUPS).map(([k, v]) => (
+                  <option key={k} value={k}>{v.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
         ) : (
           <>
@@ -137,8 +172,8 @@ function AddExerciseModal({ open, onClose, onAdd }) {
           )}
         </div>
 
-        <button onClick={handleAdd} disabled={!useCustom && !selected} className="btn-primary w-full disabled:opacity-40">
-          Adicionar ao dia
+        <button onClick={handleSave} disabled={useCustom ? !customName.trim() : !selected} className="btn-primary w-full disabled:opacity-40">
+          {existing ? 'Salvar alterações' : 'Adicionar ao dia'}
         </button>
       </div>
     </Modal>
@@ -151,10 +186,19 @@ function PlanTab() {
   const [plan, setPlan] = useState(() => getTrainingPlan())
   const [activeDay, setActiveDay] = useState(null)
   const [addModal, setAddModal] = useState(false)
+  const [editTarget, setEditTarget] = useState(null) // { dayId, idx, exercise }
   const todayId = getTodayDayId()
 
   function addExercise(dayId, ex) {
     const updated = { ...plan, [dayId]: [...(plan[dayId] ?? []), ex] }
+    setPlan(updated)
+    saveTrainingPlan(updated)
+  }
+
+  function updateExercise(dayId, idx, ex) {
+    const list = [...plan[dayId]]
+    list[idx] = ex
+    const updated = { ...plan, [dayId]: list }
     setPlan(updated)
     saveTrainingPlan(updated)
   }
@@ -165,10 +209,26 @@ function PlanTab() {
     saveTrainingPlan(updated)
   }
 
+  function moveExercise(dayId, idx, dir) {
+    const list = [...plan[dayId]]
+    const newIdx = idx + dir
+    if (newIdx < 0 || newIdx >= list.length) return
+    ;[list[idx], list[newIdx]] = [list[newIdx], list[idx]]
+    const updated = { ...plan, [dayId]: list }
+    setPlan(updated)
+    saveTrainingPlan(updated)
+  }
+
   function clearDay(dayId) {
     const updated = { ...plan, [dayId]: [] }
     setPlan(updated)
     saveTrainingPlan(updated)
+  }
+
+  function closeModal() { setAddModal(false); setEditTarget(null) }
+  function handleSave(ex) {
+    if (editTarget) updateExercise(editTarget.dayId, editTarget.idx, ex)
+    else addExercise(addModal, ex)
   }
 
   return (
@@ -214,7 +274,17 @@ function PlanTab() {
                   <p className="text-zinc-600 text-sm text-center py-3">Nenhum exercício — dia de descanso</p>
                 )}
                 {exercises.map((ex, i) => (
-                  <div key={i} className="flex items-center gap-3 px-2 py-2 rounded-xl bg-zinc-800/40 group">
+                  <div key={i} className="flex items-center gap-2 px-2 py-2 rounded-xl bg-zinc-800/40 group">
+                    <div className="flex flex-col flex-shrink-0">
+                      <button onClick={() => moveExercise(day.id, i, -1)} disabled={i === 0}
+                        className="p-0.5 rounded text-zinc-600 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
+                        <ArrowUp size={12} />
+                      </button>
+                      <button onClick={() => moveExercise(day.id, i, 1)} disabled={i === exercises.length - 1}
+                        className="p-0.5 rounded text-zinc-600 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
+                        <ArrowDown size={12} />
+                      </button>
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm text-white font-medium">{ex.name}</p>
@@ -226,8 +296,12 @@ function PlanTab() {
                         {ex.targetDuration ? ` · ${ex.targetDuration}${ex.unit}` : ''}
                       </p>
                     </div>
+                    <button onClick={() => setEditTarget({ dayId: day.id, idx: i, exercise: ex })}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-violet-600/20 text-zinc-600 hover:text-violet-400 transition-all flex-shrink-0">
+                      <Pencil size={13} />
+                    </button>
                     <button onClick={() => removeExercise(day.id, i)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 text-zinc-600 hover:text-red-400 transition-all">
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 text-zinc-600 hover:text-red-400 transition-all flex-shrink-0">
                       <Trash2 size={13} />
                     </button>
                   </div>
@@ -251,9 +325,10 @@ function PlanTab() {
       })}
 
       <AddExerciseModal
-        open={!!addModal}
-        onClose={() => setAddModal(false)}
-        onAdd={ex => addExercise(addModal, ex)}
+        open={!!addModal || !!editTarget}
+        onClose={closeModal}
+        existing={editTarget?.exercise}
+        onSave={handleSave}
       />
     </div>
   )
