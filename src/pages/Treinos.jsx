@@ -8,7 +8,7 @@ import {
   getWorkoutLogs, saveWorkoutLog, deleteWorkoutLog,
   getExerciseHistory, getTodayDayId,
 } from '../utils/trainingStorage'
-import { STRENGTH_EXERCISES, MUSCLE_GROUPS } from '../utils/strengthExercises'
+import { STRENGTH_EXERCISES, MUSCLE_GROUPS, formatDuration } from '../utils/strengthExercises'
 import { calculateHeartRateZones } from '../utils/calculations'
 import { useApp } from '../context/AppContext'
 import Modal from '../components/ui/Modal'
@@ -168,6 +168,9 @@ function AddExerciseModal({ open, onClose, onSave, existing }) {
             <div className="col-span-2">
               <label className="label">{unit === 'seg' ? 'Duração alvo (seg)' : 'Reps alvo'}</label>
               <input className="input" type="number" value={duration} onChange={e => setDuration(e.target.value)} min="1" placeholder="opcional" />
+              {unit === 'seg' && parseFloat(duration) > 0 && (
+                <p className="text-xs text-zinc-500 mt-1">= {formatDuration(parseFloat(duration))}</p>
+              )}
             </div>
           )}
         </div>
@@ -293,7 +296,7 @@ function PlanTab() {
                       <p className="text-xs text-zinc-500 mt-0.5">
                         {ex.targetSets}×{ex.targetReps}
                         {ex.targetWeight ? ` · ${ex.targetWeight}kg` : ''}
-                        {ex.targetDuration ? ` · ${ex.targetDuration}${ex.unit}` : ''}
+                        {ex.targetDuration && ex.unit === 'seg' ? ` · ${formatDuration(ex.targetDuration)}` : ''}
                       </p>
                     </div>
                     <button onClick={() => setEditTarget({ dayId: day.id, idx: i, exercise: ex })}
@@ -352,6 +355,9 @@ function SetRow({ set, onChange }) {
           <input className="input py-1.5 text-sm text-center" type="number"
             value={set.reps ?? ''} placeholder={set.unit === 'seg' ? 'seg' : 'reps'} min="0"
             onChange={e => onChange({ ...set, reps: parseInt(e.target.value) || 0 })} />
+          {set.unit === 'seg' && set.reps > 0 && (
+            <p className="text-[10px] text-zinc-500 text-center mt-0.5">{formatDuration(set.reps)}</p>
+          )}
         </div>
       </div>
       <button onClick={() => onChange({ ...set, completed: !set.completed })}
@@ -407,6 +413,7 @@ function WorkoutExerciseCard({ ex, sessionEx, onChange }) {
           <p className="text-xs text-zinc-500">
             {completedSets}/{sessionEx.sets.length} séries concluídas
             {ex.targetWeight ? ` · alvo: ${ex.targetWeight}kg` : ''}
+            {ex.targetDuration && ex.unit === 'seg' ? ` · alvo: ${formatDuration(ex.targetDuration)}` : ''}
           </p>
         </div>
         {expanded ? <ChevronUp size={14} className="text-zinc-500" /> : <ChevronDown size={14} className="text-zinc-500" />}
@@ -524,7 +531,11 @@ function TodayTab() {
                     <span className="text-sm text-white">{ex.name}</span>
                     {muscleTag(ex.muscle)}
                   </div>
-                  <span className="text-xs text-zinc-500">{ex.targetSets}×{ex.targetReps}{ex.targetWeight ? ` · ${ex.targetWeight}kg` : ''}</span>
+                  <span className="text-xs text-zinc-500">
+                    {ex.targetSets}×{ex.targetReps}
+                    {ex.targetWeight ? ` · ${ex.targetWeight}kg` : ''}
+                    {ex.targetDuration && ex.unit === 'seg' ? ` · ${formatDuration(ex.targetDuration)}` : ''}
+                  </span>
                 </div>
               </div>
             ))}
@@ -738,7 +749,9 @@ function HistoryTab() {
                             {ex.sets?.map((s, j) => (
                               <span key={j}
                                 className={`text-xs px-2 py-0.5 rounded-lg font-mono ${s.completed ? 'bg-emerald-500/15 text-emerald-400' : 'bg-zinc-700 text-zinc-500'}`}>
-                                {s.weight ? `${s.weight}kg×` : ''}{s.reps}{ex.unit === 'seg' ? 's' : ''}
+                                {ex.unit === 'seg'
+                                  ? formatDuration(s.reps)
+                                  : `${s.weight ? `${s.weight}kg×` : ''}${s.reps}`}
                               </span>
                             ))}
                           </div>

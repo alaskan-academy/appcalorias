@@ -1,14 +1,17 @@
 export const MUSCLE_GROUPS = {
-  chest:     { label: 'Peito',        color: '#f87171' },
-  back:      { label: 'Costas',       color: '#60a5fa' },
-  shoulders: { label: 'Ombros',       color: '#a78bfa' },
-  biceps:    { label: 'Bíceps',       color: '#34d399' },
-  triceps:   { label: 'Tríceps',      color: '#fbbf24' },
-  legs:      { label: 'Pernas',       color: '#fb923c' },
-  glutes:    { label: 'Glúteos',      color: '#e879f9' },
-  core:      { label: 'Core/Abdomen', color: '#2dd4bf' },
-  cardio:    { label: 'Cardio',       color: '#94a3b8' },
-  full_body: { label: 'Corpo todo',   color: '#8b5cf6' },
+  chest:       { label: 'Peito',            color: '#f87171' },
+  back:        { label: 'Costas',           color: '#60a5fa' },
+  shoulders:   { label: 'Ombros',           color: '#a78bfa' },
+  biceps:      { label: 'Bíceps',           color: '#34d399' },
+  triceps:     { label: 'Tríceps',          color: '#fbbf24' },
+  quadriceps:  { label: 'Quadríceps',       color: '#fb923c' },
+  hamstrings:  { label: 'Posterior de coxa',color: '#f59e0b' },
+  calves:      { label: 'Panturrilha',      color: '#eab308' },
+  legs:        { label: 'Pernas (geral)',   color: '#fdba74' },
+  glutes:      { label: 'Glúteos',          color: '#e879f9' },
+  core:        { label: 'Core/Abdomen',     color: '#2dd4bf' },
+  cardio:      { label: 'Cardio',           color: '#94a3b8' },
+  full_body:   { label: 'Corpo todo',       color: '#8b5cf6' },
 }
 
 export const STRENGTH_EXERCISES = [
@@ -44,14 +47,22 @@ export const STRENGTH_EXERCISES = [
   { id: 'skull_crusher',      name: 'Tríceps testa',         muscle: 'triceps',   unit: 'kg' },
   { id: 'overhead_tricep',    name: 'Tríceps francês',       muscle: 'triceps',   unit: 'kg' },
   { id: 'tricep_kickback',    name: 'Tríceps coice',         muscle: 'triceps',   unit: 'kg' },
-  // Pernas
-  { id: 'squat',              name: 'Agachamento',           muscle: 'legs',      unit: 'kg' },
-  { id: 'leg_press',          name: 'Leg press',             muscle: 'legs',      unit: 'kg' },
-  { id: 'leg_extension',      name: 'Extensão de joelho',    muscle: 'legs',      unit: 'kg' },
-  { id: 'leg_curl',           name: 'Flexão de joelho',      muscle: 'legs',      unit: 'kg' },
-  { id: 'calf_raise',         name: 'Panturrilha',           muscle: 'legs',      unit: 'kg' },
-  { id: 'lunge',              name: 'Avanço',                muscle: 'legs',      unit: 'kg' },
-  { id: 'sumo_squat',         name: 'Agachamento sumô',      muscle: 'legs',      unit: 'kg' },
+  // Pernas — Quadríceps
+  { id: 'squat',              name: 'Agachamento',           muscle: 'quadriceps', unit: 'kg' },
+  { id: 'leg_press',          name: 'Leg press',             muscle: 'quadriceps', unit: 'kg' },
+  { id: 'leg_extension',      name: 'Extensão de joelho',    muscle: 'quadriceps', unit: 'kg' },
+  { id: 'lunge',              name: 'Avanço',                muscle: 'quadriceps', unit: 'kg' },
+  { id: 'bulgarian_split_squat', name: 'Agachamento búlgaro', muscle: 'quadriceps', unit: 'kg' },
+  { id: 'hack_squat',         name: 'Hack squat',            muscle: 'quadriceps', unit: 'kg' },
+  // Pernas — Posterior de coxa
+  { id: 'leg_curl',           name: 'Flexão de joelho',      muscle: 'hamstrings', unit: 'kg' },
+  { id: 'stiff',              name: 'Stiff',                 muscle: 'hamstrings', unit: 'kg' },
+  { id: 'good_morning',       name: 'Good morning',          muscle: 'hamstrings', unit: 'kg' },
+  // Pernas — Panturrilha
+  { id: 'calf_raise',         name: 'Panturrilha em pé',     muscle: 'calves',    unit: 'kg' },
+  { id: 'seated_calf_raise',  name: 'Panturrilha sentado',   muscle: 'calves',    unit: 'kg' },
+  // Pernas — Glúteos (predominância de glúteo/adutores)
+  { id: 'sumo_squat',         name: 'Agachamento sumô',      muscle: 'glutes',    unit: 'kg' },
   // Glúteos
   { id: 'hip_thrust',         name: 'Hip thrust',            muscle: 'glutes',    unit: 'kg' },
   { id: 'glute_bridge',       name: 'Ponte de glúteo',       muscle: 'glutes',    unit: 'kg' },
@@ -72,3 +83,19 @@ export const STRENGTH_EXERCISES = [
   { id: 'breathing_plan',     name: 'Respiração',            muscle: 'cardio',    unit: 'seg' },
   { id: 'guided_meditation_plan', name: 'Meditação guiada',  muscle: 'cardio',    unit: 'seg' },
 ]
+
+// Formata uma duração em segundos para a unidade mais legível (s, min ou h)
+export function formatDuration(totalSeconds) {
+  const s = Math.round(Number(totalSeconds) || 0)
+  if (s <= 0) return '0s'
+  if (s < 60) return `${s}s`
+
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const rem = s % 60
+
+  if (h > 0) {
+    return m > 0 ? `${h}h ${m}min` : `${h}h`
+  }
+  return rem > 0 ? `${m}min ${rem}s` : `${m}min`
+}
